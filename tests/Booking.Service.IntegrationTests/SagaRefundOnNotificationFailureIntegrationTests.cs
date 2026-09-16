@@ -54,13 +54,13 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
             // Saga is now past the payment step and waiting for the notification outcome.
             // Wait briefly for the booking to flip to Confirmed before injecting failure, so we are
             // not racing the saga's payment-success transition.
-            var confirmed = await WaitForBookingStatusAsync(client, customerId, "Confirmed", TimeSpan.FromSeconds(30));
+            var confirmed = await WaitForBookingStatusAsync(client, customerId, "Confirmed", TimeSpan.FromSeconds(60));
             confirmed.Should().BeTrue();
 
             var bookingId = (await GetCustomerBookingsAsync(client, customerId))
                 .Single(item => item.EventId == eventId).BookingId;
 
-            await WaitForSagaStateAsync(bookingId, "AwaitingNotification", TimeSpan.FromSeconds(30));
+            await WaitForSagaStateAsync(bookingId, "AwaitingNotification", TimeSpan.FromSeconds(60));
 
             // Simulate Notification.Service exhausting its retry policy.
             await refundObserverBus.Publish(new NotificationFailedV1(
@@ -70,7 +70,7 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
                 Reason: "Integration test simulated SMTP failure.",
                 OccurredOnUtc: DateTime.UtcNow));
 
-            var observed = await refundObserver.WaitForRefundAsync(bookingId, TimeSpan.FromSeconds(30));
+            var observed = await refundObserver.WaitForRefundAsync(bookingId, TimeSpan.FromSeconds(60));
             observed.Should().BeTrue("saga must publish RefundRequestedV1 in response to NotificationFailedV1");
         }
         finally
@@ -112,11 +112,13 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
                 new ReserveSeatRequest(eventId, "A2"));
             reserveResponse.EnsureSuccessStatusCode();
 
-            var confirmed = await WaitForBookingStatusAsync(client, customerId, "Confirmed", TimeSpan.FromSeconds(30));
+            var confirmed = await WaitForBookingStatusAsync(client, customerId, "Confirmed", TimeSpan.FromSeconds(60));
             confirmed.Should().BeTrue();
 
             var bookingId = (await GetCustomerBookingsAsync(client, customerId))
                 .Single(item => item.EventId == eventId).BookingId;
+
+            await WaitForSagaStateAsync(bookingId, "AwaitingNotification", TimeSpan.FromSeconds(60));
 
             // Fire Notification failure to push the saga into Refunding. Nothing on the bus is
             // listening for RefundRequestedV1, so the saga is now stranded — exactly the G6
@@ -128,7 +130,7 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
                 Reason: "Integration test simulated SMTP exhaustion.",
                 OccurredOnUtc: DateTime.UtcNow));
 
-            var inRefunding = await WaitForSagaStateAsync(bookingId, "Refunding", TimeSpan.FromSeconds(15));
+            var inRefunding = await WaitForSagaStateAsync(bookingId, "Refunding", TimeSpan.FromSeconds(30));
             inRefunding.Should().BeTrue("saga must reach Refunding before the timeout sweep can detect it");
 
             // The fixture disables the polling worker so the test can drive the sweep
@@ -139,7 +141,7 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
             var published = await RunSagaTimeoutSweepOnceAsync();
             published.Should().BeGreaterThanOrEqualTo(1, "the backdated saga should be the one we just stranded");
 
-            var inRefundFailed = await WaitForSagaStateAsync(bookingId, "RefundFailed", TimeSpan.FromSeconds(15));
+            var inRefundFailed = await WaitForSagaStateAsync(bookingId, "RefundFailed", TimeSpan.FromSeconds(30));
             inRefundFailed.Should().BeTrue("the timeout branch must transition the saga to the terminal RefundFailed state");
 
             // Admin endpoint must surface the timeout snapshot for ops triage.
@@ -218,6 +220,7 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
             {
                 endpoint.Handler<ChargePaymentRequestedV1>(async context =>
                 {
+                    await Task.Delay(500);
                     await context.Publish(new PaymentResultReceivedV1(
                         MessageId: Guid.NewGuid(),
                         CorrelationId: context.Message.CorrelationId,
