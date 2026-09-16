@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="EventHub.BuildingBlocks" />
+    <PackageReference Include="EventHub.Contracts" />
+  </ItemGroup>
+
+</Project>

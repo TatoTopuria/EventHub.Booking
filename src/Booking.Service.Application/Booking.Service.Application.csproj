@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="EventHub.BuildingBlocks" />
+    <PackageReference Include="EventHub.Contracts" />
+    <ProjectReference Include="..\Booking.Service.Domain\Booking.Service.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Booking.Service.UnitTests" />
+    <InternalsVisibleTo Include="Booking.Service.IntegrationTests" />
+  </ItemGroup>
+
+</Project>
