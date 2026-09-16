@@ -101,14 +101,11 @@ public sealed class GatewayForwardedClaimsHandlerTests
 
         var gatewayOptions = Options.Create(new GatewayAuthOptions { SharedSecret = SharedSecret });
 
-#pragma warning disable CS0618
         var handler = new GatewayForwardedClaimsHandler(
             optionsMonitor.Object,
             NullLoggerFactory.Instance,
             UrlEncoder.Default,
-            new SystemClock(),
             gatewayOptions);
-#pragma warning restore CS0618
 
         var scheme = new AuthenticationScheme(
             GatewayForwardedClaimsHandler.SchemeName,
