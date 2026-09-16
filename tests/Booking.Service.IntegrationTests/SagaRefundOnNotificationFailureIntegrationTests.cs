@@ -60,6 +60,8 @@ public sealed class SagaRefundOnNotificationFailureIntegrationTests(BookingApiFa
             var bookingId = (await GetCustomerBookingsAsync(client, customerId))
                 .Single(item => item.EventId == eventId).BookingId;
 
+            await WaitForSagaStateAsync(bookingId, "AwaitingNotification", TimeSpan.FromSeconds(30));
+
             // Simulate Notification.Service exhausting its retry policy.
             await refundObserverBus.Publish(new NotificationFailedV1(
                 MessageId: Guid.NewGuid(),

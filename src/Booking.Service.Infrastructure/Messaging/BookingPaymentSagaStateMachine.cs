@@ -131,7 +131,25 @@ public sealed class BookingPaymentSagaStateMachine : MassTransitStateMachine<Boo
         During(AwaitingBookingConfirmation,
             When(BookingConfirmed)
                 .Then(context => context.Saga.UpdatedAtUtc = context.Message.OccurredOnUtc)
-                .TransitionTo(AwaitingNotification));
+                .TransitionTo(AwaitingNotification),
+
+            When(NotificationFailed)
+                .Then(context =>
+                {
+                    context.Saga.NotificationStatus = "Failed";
+                    context.Saga.NotificationFailureReason = context.Message.Reason;
+                    context.Saga.NotificationCompletedAtUtc = context.Message.OccurredOnUtc;
+                    context.Saga.UpdatedAtUtc = context.Message.OccurredOnUtc;
+                    context.Saga.RefundRequestedAtUtc = DateTime.UtcNow;
+                })
+                .Publish(context => new RefundRequestedV1(
+                    MessageId: NewId.NextGuid(),
+                    CorrelationId: context.Message.CorrelationId,
+                    BookingId: context.Message.BookingId,
+                    PaymentIntentId: context.Saga.PaymentIntentId ?? Guid.Empty,
+                    Reason: context.Message.Reason,
+                    OccurredOnUtc: DateTime.UtcNow))
+                .TransitionTo(Refunding));
 
         // F7 — Notification outcome arrives either as success (saga finalizes happily) or as
         // exhausted-retries failure (saga compensates by issuing a refund).
@@ -175,6 +193,9 @@ public sealed class BookingPaymentSagaStateMachine : MassTransitStateMachine<Boo
         //     RefundCompleted is dropped by the dispatcher (lands in _skipped) rather than
         //     re-opening a terminal saga.
         During(Refunding,
+            When(BookingConfirmed)
+                .Then(context => context.Saga.UpdatedAtUtc = context.Message.OccurredOnUtc),
+
             When(RefundCompleted)
                 .Then(context =>
                 {
